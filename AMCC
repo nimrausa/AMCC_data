@@ -1,0 +1,654 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyOOfLEPzQYJZ8ZC0ZDd00Ni",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/nimrausa/AMCC_data/blob/main/AMCC\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "ZBwf8Lf4wy6y"
+      },
+      "outputs": [],
+      "source": [
+        "!pip install langchain\n",
+        "!pip install openai\n",
+        "!pip install PyPDF2\n",
+        "!pip install faiss-cpu\n",
+        "!pip install tiktoken"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from PyPDF2 import PdfReader\n",
+        "from langchain.embeddings.openai import OpenAIEmbeddings\n",
+        "from langchain.text_splitter import CharacterTextSplitter\n",
+        "from langchain.vectorstores import ElasticVectorSearch, Pinecone, Weaviate, FAISS"
+      ],
+      "metadata": {
+        "id": "HRGI8U1lxXGp"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import os\n",
+        "os.environ[\"OPENAI_API_KEY\"] = \"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\""
+      ],
+      "metadata": {
+        "id": "rAN2l8q4xX6C"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!git clone https://github.com/nimrausa/AMCC_data.git"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "s40cBstOyJzU",
+        "outputId": "e2f57c99-7df8-4e6b-c76f-951025580eec"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "fatal: destination path 'AMCC_data' already exists and is not an empty directory.\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import os\n",
+        "\n",
+        "# Path to the folder containing PDF files\n",
+        "pdf_folder = '/content/AMCC_data'\n",
+        "\n",
+        "# Get the list of PDF files\n",
+        "pdf_files = [file for file in os.listdir(pdf_folder) if file.endswith('.pdf')]\n",
+        "\n",
+        "# Print the list of PDF files\n",
+        "for file in pdf_files:\n",
+        "    print(file)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "wEjj_7wwHd6T",
+        "outputId": "5076adbb-f881-4179-a477-d9339b81f3be"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "AMM_Report-2016_Digital.pdf\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "pdf_files"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "x03nJ3gvLXRK",
+        "outputId": "151ea969-a64a-4037-a244-bc020502c64d"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "['AMM_Report-2016_Digital.pdf']"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 93
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import PyPDF2\n",
+        "\n",
+        "# Path to the PDF file within the cloned repository\n",
+        "pdf_file_path = '/content/AMCC_data/AMM_Report-2016_Digital.pdf'\n",
+        "#https://github.com/nimrausa/AMCC_data/blob/main/AMM_Report-2016_Digital.pdf\n",
+        "# Open the PDF file in read-binary mode\n",
+        "with open(pdf_file_path, 'rb') as file:\n",
+        "    # Create a PDF reader object\n",
+        "    pdf_reader = PyPDF2.PdfReader(file)\n",
+        "\n",
+        "    # Initialize an empty string to store the extracted text\n",
+        "    raw_text = \"\"\n",
+        "\n",
+        "    # Iterate over each page in the PDF\n",
+        "    for page in pdf_reader.pages:\n",
+        "        # Extract the text from the page and append it to the raw_text variable\n",
+        "        raw_text += page.extract_text()\n",
+        "\n",
+        "# Print the extracted text\n",
+        "print(raw_text)"
+      ],
+      "metadata": {
+        "id": "0U5aHXg4LbRh"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "text_splitter = CharacterTextSplitter(\n",
+        "    separator = \"\\n\",\n",
+        "    chunk_size = 1000,\n",
+        "    chunk_overlap  = 200,\n",
+        "    length_function = len,\n",
+        ")\n",
+        "texts = text_splitter.split_text(raw_text)"
+      ],
+      "metadata": {
+        "id": "kX1v3dpjNFuR"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "len(texts)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "hS3Y73yJNROz",
+        "outputId": "c315fe37-51d2-477f-c8ed-04daa9a9fc96"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "257"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 96
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[0]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "CYWKWLsrNTmF",
+        "outputId": "40e3e376-c617-410d-8506-8ee2803a2a91"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'Produced by: In Partnership with:\\nAmerican Muslim \\nMarket Study 2014/15The Muslim GreenFOR INTERNAL USE BY CUSTOMERS ONLY\\nCopyrights\\nDisclaimer© 2014/ 2015 DinarStandard™.\\nAll Rights Reserved.\\nAll information contained in this publication is copyrighted in the name of DinarStandard™ unless otherwise indicated, \\nand as such no part of this publication may be reproduced, re packaged, redistributed, resold in whole or in any part, or \\nused in any form or by any means, graphic, electronic or mechanical, including photocopying, recording, taping, or by information storage or retrieval, or by any other means, without the express written consent of the publisher.\\nDinarStandard™\\n(DBA Strategy Insights Inc.)80 Broad Street, 5th FloorNew York City, NY 10004, USA1.347.624.7454info@dinarstandard.comhttp://advisory.dinarstandard.com\\nAll information contained in this publication has been researched and compiled from sources believed to be accurate'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 97
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[1]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "DJcd_zPhNVNK",
+        "outputId": "6b7018e0-749f-46f3-c64c-b9afa3fe1637"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'All information contained in this publication has been researched and compiled from sources believed to be accurate \\nand reliable at the time of publishing. However, in view of the natural scope for human and/or mechanical error, either at source or during production, DinarStandard™ accepts no liability whatsoever for any loss or damage resulting from errors, inaccuracies or omissions affecting any part of the publication. All information is provided without warranty, \\nand DinarStandard™ makes no representation of warranty of any kind as to the accuracy or completeness of any information hereto contained.\\nDescriptions of, or references to, products, publications, or ganizations or individuals within this publication does not \\nimply endorsement of any product or publication, organization or individual.©DinarStandard 2014/ 2015, All Rights Reserved.AMERICAN MUSLIM MARKET 2014\\n0031. American Muslim Consumer - 2015/16 Update\\n2. Executive Summary'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 98
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[2]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 122
+        },
+        "id": "Ra0Ycq5-NXcx",
+        "outputId": "7084ba4f-1607-4e72-87d2-83ba9fc755f4"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'0031. American Muslim Consumer - 2015/16 Update\\n2. Executive Summary      \\n3 .  A c k n o w l e d g e m e n t s                    4. Study Purpose, Scope and Approach 5. Global Islamic Market Context and USA  6. American Muslim Market  a. American Muslim Demographic Background  b. Market Sizing (Disposable Income and Expenditure)   c. Market Dynamic: Geographic Distribution    d. Market Dynamic: Ethnic/Sub-Clusters  e. Market Dynamic: Community Centers and Non-Profits  f. Case Studies  \\nFood:   Halal Guys  Honest Chops  Elevation Burger\\n  Finance:   ReCenter  African Dev. Center\\n  Education:  Zaytuna College  Bayyinah Institute Noor Kids\\n  Travel:  Marriott International Dar el Salam Travel\\n  Media:  UPF Films  MuslimKidsTV  My Halal Kitchen\\n  Fashion/Design: Artizara   Sakina Design\\n  Pharma:  Noor Vitamins\\n7. Consumer Behavior and Demand Gaps (National Survey Results)'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 99
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[3]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "TUjfBOz6NZKJ",
+        "outputId": "a949e34a-e627-482a-94fc-dbd4fe7f6b15"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'Media:  UPF Films  MuslimKidsTV  My Halal Kitchen\\n  Fashion/Design: Artizara   Sakina Design\\n  Pharma:  Noor Vitamins\\n7. Consumer Behavior and Demand Gaps (National Survey Results) \\n a. Survey Results: General consumption experience and needs  b. Survey Results: Retail experience  c. Survey Results: Halal Food experience and needs  d. Survey Results: Islamic Finance experience and needs  e. Survey Results: Education experience and needs 9. Media Habits  9. Recommended Strategies and Worksheets 10. Appendix a. State Level Muslim Population  b. Select Major Muslim Media List  c. Calendar of Events  d. Terminology Table of Contents\\n004\\n008\\n014\\n016\\n020\\n030\\n031\\n033\\n035\\n036\\n044\\n047\\n063\\n064\\n071\\n074\\n084\\n092\\n097\\n100\\n113\\n114\\n117\\n122\\n124004 ©DinarStandard 2014/ 2015, All Rights Reserved.AMERICAN MUSLIM CONSUMER– 2015/16 UPDATE\\nMuslim Household Income and Spend\\nPopulation:  In 2015, there was an estimated 5.8 Million Muslims in the U.S., accounting for 1.8 percent'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 100
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[4]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "qnIIqEgzNoaE",
+        "outputId": "ee642c62-e1be-47a3-a5a1-e19ee6f7c4f9"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'Muslim Household Income and Spend\\nPopulation:  In 2015, there was an estimated 5.8 Million Muslims in the U.S., accounting for 1.8 percent \\nof the population.1 Spend:  Total disposable income increased by 4.3 percent CAGR between 2013 and \\n2015 to reach $107 billion.2 \\n1   The estimation uses the Association of Statisticians of American Religious Bodies (ASARB) 2010 Religious Congregations and Membership Study as a \\nbaseline.  Using their mosque attendance data per state, we applied a regular non-mosque attendee estimate from the year 2010 t o derive that year’s \\ntotal Muslim population.  We then applied a conservative US Muslim population growth rate of 3.5% to derive 2015 estimates.\\n2   Source: 2007 Pew Research Center report, “Muslim Americans: Middle Class and Mostly Mainstream,” Muslim Americans generally  mirror the U.S. \\npublic in education and income; Size of Muslim household expenditure (based on 5.8 million ppn. estimate) reflective of US Aver age Annual Income'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 101
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[5]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 122
+        },
+        "id": "Pw-ERYj4NrPT",
+        "outputId": "8b03c831-ebe2-4399-d2ef-26f86fdaeaa7"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'public in education and income; Size of Muslim household expenditure (based on 5.8 million ppn. estimate) reflective of US Aver age Annual Income \\nexpenditure of all consumer units, Consumer Expenditure Survey, 2006-2008, Bureau of Labor Statistics by the US Census Bureau. For general idea \\npurposes only.  Executive Summary\\nMuslims are a rapidly growing customer segment, reaching 5.8million consumers in 2015 and commanded $107 billion in annual disposable income in 2015. The ecosystem of products and services addressing Muslim faith-based needs has evolved substantially, with many new players seeking to emulate the remarkable success stories of Saﬀron Road and the Halal Guys.\\nSelect key and emerging player developments in the U.S. across lifestyle sectors  \\nHalal food and consumer products:\\nSelect key and emerging player developments in the U.S. across lifestyle sectors:'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 102
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[6]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "NWujsIFVNtHc",
+        "outputId": "76dad0c0-e177-480d-e630-ece41f8bc954"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'Select key and emerging player developments in the U.S. across lifestyle sectors  \\nHalal food and consumer products:\\nSelect key and emerging player developments in the U.S. across lifestyle sectors:\\n • Saffron Road  revenues surpassed $40 million in 2015, and was recognized as the fastest growing brand of all entrees in the \\nU.S. The company undertook its first acquisition, of Canadian Snack brand Mediterranean foods, in 2015.\\n • Starting out as a food cart operation in New York City, Halal Guys  is a U.S. Halal success story, with plans to expand to 340 \\nlocations globally, including across the U.S. and into Malaysia, Canada, the Philippines and Indonesia. \\n • Noor Pharmaceuticals has experienced substantial growth, increasing headcount to over 100 people in 2015, and partnering \\nwith major U.S. including Duane Reade, Whole Foods and Walgreens. The company has also partnered with Islamic Relief in 2016 to donate meals to those in need in the U.S.AREA 2013 SPEND,'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 103
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[7]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "JSarJ_nHOBBZ",
+        "outputId": "836569b5-e2fd-4005-e8d5-0d54a5a9d39f"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'with major U.S. including Duane Reade, Whole Foods and Walgreens. The company has also partnered with Islamic Relief in 2016 to donate meals to those in need in the U.S.AREA 2013 SPEND, \\n$ IN BILLIONS2015 SPEND, \\n$ IN BILLIONSANNUALIZED \\nPERCENTAGE GROWTH\\nTotal Muslim Household Disposable Income 98.4 107 4.3 percent\\n2015 spend by segment, $ in billions\\nHousing and Home Services 31.6 Healthcare 7.5\\nFood & Beverage 12.5 Entertainment 5.3Motor Vehicle & Other Services 12.1 Apparel & Services 5.6Insurance & Pensions 12.1 Personal Care 1.2Education 10.9 Charity/Contributions 3.1©DinarStandard 2014/ 2015, All Rights Reserved.AMERICAN MUSLIM MARKET 2014\\n005 • Honest Chops  is the country’s first wholesale organic Halal meat retail store, founded in New York city founded in early 2014, \\nopening a fast-food outlet, Honest Chops Burger, in 2016\\n • Paramount Fine Foods , based in Canada, is emerging as a sizeable North American Halal Food restaurant chain, founded'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 104
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[8]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "gYF9i-WmOC81",
+        "outputId": "887ef7db-1075-4524-841f-56ff911fe48c"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'opening a fast-food outlet, Honest Chops Burger, in 2016\\n • Paramount Fine Foods , based in Canada, is emerging as a sizeable North American Halal Food restaurant chain, founded \\nin 2007 and having now established over 30 Middle Eastern Halal restaurants and over 20 currently under construction. The company has expanded to the US and is one of the few Halal companies that have addressed the “farm-to-fork” experience\\n • SprinJene  is a US-based certified Halal toothpaste brand, certified by ISWA. The toothpaste products are also certified gluten \\nfree, vegan and kosher.\\n • Several major events were held since the 2014 AMCC conference which have furthered interest in the Halal Food and Products \\nindustry, including the 2015 ISNA conference , attracting 15,000 people, and several Halal Food fests, including Halal Fest \\nFremont , attracting 15,000 and in Canada, Halal Food Toronto, attracting 10,000 people.\\nIslamic-themed Media:'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 105
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[9]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "nFXmzv6dOE17",
+        "outputId": "82dac848-2ee4-48c3-f28d-e2fa3b761e36"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'Fremont , attracting 15,000 and in Canada, Halal Food Toronto, attracting 10,000 people.\\nIslamic-themed Media:\\n • DEEN TV , is the first 24/7 Halal online entertainment channel and is currently seeking to raise $150,000 for the development \\nof its studio, equipment and staff with an aim to offer better and varied programming. Deen TV was founded by Native Deen, a leading Islamic music production company.\\n • Productive Muslim , which debuted as a blog in 2007, has now scaled to become a media/training company offering online \\ncourses as well as live workshops. The company also recently authored the Productive Muslim book, co-authored by Tariq Ramadan.\\nModest Fashion:\\n • Verona Collection , an Islamic modest fashion company that produces hijabs, dresses, cardigans, and activewear, is one of the \\nfirst Muslim women’s clothing stores to open in a Mainstream mall, opening its store at Orlando Fashion Square mall in May 2015.'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 106
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[10]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "2Tw_TAUFOHXU",
+        "outputId": "5af84b88-46b6-44ea-f86c-8adb0f71f96d"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'first Muslim women’s clothing stores to open in a Mainstream mall, opening its store at Orlando Fashion Square mall in May 2015.\\n • Veil is a highly innovative modest fashion company founded in 2015 and raised close to $40,000 in a Kickstarter campaign, \\nand in 2016 launched their “Cool-Dry” hijabs, which are waterproof and heat resistant.\\nFinance and Incubation: \\n • Launchgood, winner of the 2014 AMCC Entrepreneurship Showcase Award, has crowd-funded over $11 million in projects \\nacross over 1,000 projects, and acted as a key source of support for social impact initiatives and Muslim entrepreneurial \\nventures.\\n • Affinis Labs is a United States-based incubator with global reach founded in 2015 and seeking to incubate startups that \\ndevelop products and services to address the Digital needs of Muslim consumers. \\nU.S. based Digital Muslim Startups:\\nThere has been signi ﬁcant development in the Digital Services system addressing the varied needs of Muslims,'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 107
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "texts[11]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "id": "vHt2ytvtOK-1",
+        "outputId": "db5cb86f-a47f-43ad-edea-ffe094a87510"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'U.S. based Digital Muslim Startups:\\nThere has been signi ﬁcant development in the Digital Services system addressing the varied needs of Muslims, \\nwith select innovations including:\\n • Islamic Finance:  Sharia Portfolio  is a boutique asset management firm specialized in Sharia-compliant investing solutions \\nfrom a team of investment advisors. Sharia Portfolio has grown to $50 million in less than 2 years of operation.\\n • Quran memorization:  Quran Academy seeks to help dedicated users to better meet their Quran memorization goals and was \\naccepted into Start-Up Chile and Malaysia’s MaGIC Accelerator Program Quran Academy, and subsequently launched Quran companion. \\n • Online media: Muslim Kids TV is an online television and media platform for children that has content focused on Islamic-\\nbased values through interactive videos and games, seeking to emanate the style of highly popular children’s programs such as Sesame Street.'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 108
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Download embeddings from OpenAI\n",
+        "embeddings = OpenAIEmbeddings()"
+      ],
+      "metadata": {
+        "id": "nAzR1qtAOayM"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "docsearch = FAISS.from_texts(texts, embeddings)\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 419
+        },
+        "id": "IuMF7zcHOcP7",
+        "outputId": "34822f7c-2e95-4e17-ed99-c39bd21d4374"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:langchain.embeddings.openai:Retrying langchain.embeddings.openai.embed_with_retry.<locals>._embed_with_retry in 4.0 seconds as it raised RateLimitError: You exceeded your current quota, please check your plan and billing details..\n",
+            "WARNING:langchain.embeddings.openai:Retrying langchain.embeddings.openai.embed_with_retry.<locals>._embed_with_retry in 4.0 seconds as it raised RateLimitError: You exceeded your current quota, please check your plan and billing details..\n",
+            "WARNING:langchain.embeddings.openai:Retrying langchain.embeddings.openai.embed_with_retry.<locals>._embed_with_retry in 4.0 seconds as it raised RateLimitError: You exceeded your current quota, please check your plan and billing details..\n",
+            "WARNING:langchain.embeddings.openai:Retrying langchain.embeddings.openai.embed_with_retry.<locals>._embed_with_retry in 8.0 seconds as it raised RateLimitError: You exceeded your current quota, please check your plan and billing details..\n",
+            "WARNING:langchain.embeddings.openai:Retrying langchain.embeddings.openai.embed_with_retry.<locals>._embed_with_retry in 10.0 seconds as it raised RateLimitError: You exceeded your current quota, please check your plan and billing details..\n"
+          ]
+        },
+        {
+          "output_type": "error",
+          "ename": "RateLimitError",
+          "evalue": "ignored",
+          "traceback": [
+            "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+            "\u001b[0;31mRateLimitError\u001b[0m                            Traceback (most recent call last)",
+            "\u001b[0;32m<ipython-input-110-42880e340ce0>\u001b[0m in \u001b[0;36m<cell line: 1>\u001b[0;34m()\u001b[0m\n\u001b[0;32m----> 1\u001b[0;31m \u001b[0mdocsearch\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mFAISS\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mfrom_texts\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mtexts\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0membeddings\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/langchain/vectorstores/faiss.py\u001b[0m in \u001b[0;36mfrom_texts\u001b[0;34m(cls, texts, embedding, metadatas, ids, **kwargs)\u001b[0m\n\u001b[1;32m    565\u001b[0m                 \u001b[0mfaiss\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mFAISS\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mfrom_texts\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mtexts\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0membeddings\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    566\u001b[0m         \"\"\"\n\u001b[0;32m--> 567\u001b[0;31m         \u001b[0membeddings\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0membedding\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0membed_documents\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mtexts\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    568\u001b[0m         return cls.__from(\n\u001b[1;32m    569\u001b[0m             \u001b[0mtexts\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/langchain/embeddings/openai.py\u001b[0m in \u001b[0;36membed_documents\u001b[0;34m(self, texts, chunk_size)\u001b[0m\n\u001b[1;32m    506\u001b[0m         \u001b[0;31m# NOTE: to keep things simple, we assume the list may contain texts longer\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    507\u001b[0m         \u001b[0;31m#       than the maximum context and use length-safe embedding function.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 508\u001b[0;31m         \u001b[0;32mreturn\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_get_len_safe_embeddings\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mtexts\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mengine\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdeployment\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    509\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    510\u001b[0m     async def aembed_documents(\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/langchain/embeddings/openai.py\u001b[0m in \u001b[0;36m_get_len_safe_embeddings\u001b[0;34m(self, texts, engine, chunk_size)\u001b[0m\n\u001b[1;32m    356\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    357\u001b[0m         \u001b[0;32mfor\u001b[0m \u001b[0mi\u001b[0m \u001b[0;32min\u001b[0m \u001b[0m_iter\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 358\u001b[0;31m             response = embed_with_retry(\n\u001b[0m\u001b[1;32m    359\u001b[0m                 \u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    360\u001b[0m                 \u001b[0minput\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mtokens\u001b[0m\u001b[0;34m[\u001b[0m\u001b[0mi\u001b[0m \u001b[0;34m:\u001b[0m \u001b[0mi\u001b[0m \u001b[0;34m+\u001b[0m \u001b[0m_chunk_size\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/langchain/embeddings/openai.py\u001b[0m in \u001b[0;36membed_with_retry\u001b[0;34m(embeddings, **kwargs)\u001b[0m\n\u001b[1;32m    106\u001b[0m         \u001b[0;32mreturn\u001b[0m \u001b[0m_check_response\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mresponse\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    107\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 108\u001b[0;31m     \u001b[0;32mreturn\u001b[0m \u001b[0m_embed_with_retry\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    109\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    110\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/tenacity/__init__.py\u001b[0m in \u001b[0;36mwrapped_f\u001b[0;34m(*args, **kw)\u001b[0m\n\u001b[1;32m    287\u001b[0m         \u001b[0;34m@\u001b[0m\u001b[0mfunctools\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mwraps\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mf\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    288\u001b[0m         \u001b[0;32mdef\u001b[0m \u001b[0mwrapped_f\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m:\u001b[0m \u001b[0mt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mAny\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkw\u001b[0m\u001b[0;34m:\u001b[0m \u001b[0mt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mAny\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;34m->\u001b[0m \u001b[0mt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mAny\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 289\u001b[0;31m             \u001b[0;32mreturn\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mf\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkw\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    290\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    291\u001b[0m         \u001b[0;32mdef\u001b[0m \u001b[0mretry_with\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m:\u001b[0m \u001b[0mt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mAny\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m:\u001b[0m \u001b[0mt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mAny\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;34m->\u001b[0m \u001b[0mWrappedFn\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/tenacity/__init__.py\u001b[0m in \u001b[0;36m__call__\u001b[0;34m(self, fn, *args, **kwargs)\u001b[0m\n\u001b[1;32m    377\u001b[0m         \u001b[0mretry_state\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mRetryCallState\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mretry_object\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mfn\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mfn\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0margs\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mkwargs\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    378\u001b[0m         \u001b[0;32mwhile\u001b[0m \u001b[0;32mTrue\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 379\u001b[0;31m             \u001b[0mdo\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0miter\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mretry_state\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mretry_state\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    380\u001b[0m             \u001b[0;32mif\u001b[0m \u001b[0misinstance\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mdo\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mDoAttempt\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    381\u001b[0m                 \u001b[0;32mtry\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/tenacity/__init__.py\u001b[0m in \u001b[0;36miter\u001b[0;34m(self, retry_state)\u001b[0m\n\u001b[1;32m    323\u001b[0m             \u001b[0mretry_exc\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mretry_error_cls\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mfut\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    324\u001b[0m             \u001b[0;32mif\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mreraise\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 325\u001b[0;31m                 \u001b[0;32mraise\u001b[0m \u001b[0mretry_exc\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mreraise\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    326\u001b[0m             \u001b[0;32mraise\u001b[0m \u001b[0mretry_exc\u001b[0m \u001b[0;32mfrom\u001b[0m \u001b[0mfut\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mexception\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    327\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/tenacity/__init__.py\u001b[0m in \u001b[0;36mreraise\u001b[0;34m(self)\u001b[0m\n\u001b[1;32m    156\u001b[0m     \u001b[0;32mdef\u001b[0m \u001b[0mreraise\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;34m->\u001b[0m \u001b[0mt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mNoReturn\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    157\u001b[0m         \u001b[0;32mif\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mlast_attempt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mfailed\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 158\u001b[0;31m             \u001b[0;32mraise\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mlast_attempt\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mresult\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    159\u001b[0m         \u001b[0;32mraise\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    160\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/lib/python3.10/concurrent/futures/_base.py\u001b[0m in \u001b[0;36mresult\u001b[0;34m(self, timeout)\u001b[0m\n\u001b[1;32m    449\u001b[0m                     \u001b[0;32mraise\u001b[0m \u001b[0mCancelledError\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    450\u001b[0m                 \u001b[0;32melif\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_state\u001b[0m \u001b[0;34m==\u001b[0m \u001b[0mFINISHED\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 451\u001b[0;31m                     \u001b[0;32mreturn\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m__get_result\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    452\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    453\u001b[0m                 \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_condition\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mwait\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mtimeout\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/lib/python3.10/concurrent/futures/_base.py\u001b[0m in \u001b[0;36m__get_result\u001b[0;34m(self)\u001b[0m\n\u001b[1;32m    401\u001b[0m         \u001b[0;32mif\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_exception\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    402\u001b[0m             \u001b[0;32mtry\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 403\u001b[0;31m                 \u001b[0;32mraise\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_exception\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    404\u001b[0m             \u001b[0;32mfinally\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    405\u001b[0m                 \u001b[0;31m# Break a reference cycle with the exception in self._exception\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/tenacity/__init__.py\u001b[0m in \u001b[0;36m__call__\u001b[0;34m(self, fn, *args, **kwargs)\u001b[0m\n\u001b[1;32m    380\u001b[0m             \u001b[0;32mif\u001b[0m \u001b[0misinstance\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mdo\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mDoAttempt\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    381\u001b[0m                 \u001b[0;32mtry\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 382\u001b[0;31m                     \u001b[0mresult\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mfn\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    383\u001b[0m                 \u001b[0;32mexcept\u001b[0m \u001b[0mBaseException\u001b[0m\u001b[0;34m:\u001b[0m  \u001b[0;31m# noqa: B902\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    384\u001b[0m                     \u001b[0mretry_state\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mset_exception\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0msys\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mexc_info\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m  \u001b[0;31m# type: ignore[arg-type]\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/langchain/embeddings/openai.py\u001b[0m in \u001b[0;36m_embed_with_retry\u001b[0;34m(**kwargs)\u001b[0m\n\u001b[1;32m    103\u001b[0m     \u001b[0;34m@\u001b[0m\u001b[0mretry_decorator\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    104\u001b[0m     \u001b[0;32mdef\u001b[0m \u001b[0m_embed_with_retry\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m:\u001b[0m \u001b[0mAny\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;34m->\u001b[0m \u001b[0mAny\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 105\u001b[0;31m         \u001b[0mresponse\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0membeddings\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mclient\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcreate\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    106\u001b[0m         \u001b[0;32mreturn\u001b[0m \u001b[0m_check_response\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mresponse\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    107\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/openai/api_resources/embedding.py\u001b[0m in \u001b[0;36mcreate\u001b[0;34m(cls, *args, **kwargs)\u001b[0m\n\u001b[1;32m     31\u001b[0m         \u001b[0;32mwhile\u001b[0m \u001b[0;32mTrue\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     32\u001b[0m             \u001b[0;32mtry\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 33\u001b[0;31m                 \u001b[0mresponse\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0msuper\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcreate\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     34\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     35\u001b[0m                 \u001b[0;31m# If a user specifies base64, we'll just return the encoded string.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/openai/api_resources/abstract/engine_api_resource.py\u001b[0m in \u001b[0;36mcreate\u001b[0;34m(cls, api_key, api_base, api_type, request_id, api_version, organization, **params)\u001b[0m\n\u001b[1;32m    151\u001b[0m         )\n\u001b[1;32m    152\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 153\u001b[0;31m         response, _, api_key = requestor.request(\n\u001b[0m\u001b[1;32m    154\u001b[0m             \u001b[0;34m\"post\"\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    155\u001b[0m             \u001b[0murl\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/openai/api_requestor.py\u001b[0m in \u001b[0;36mrequest\u001b[0;34m(self, method, url, params, headers, files, stream, request_id, request_timeout)\u001b[0m\n\u001b[1;32m    296\u001b[0m             \u001b[0mrequest_timeout\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mrequest_timeout\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    297\u001b[0m         )\n\u001b[0;32m--> 298\u001b[0;31m         \u001b[0mresp\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mgot_stream\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0m_interpret_response\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mresult\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mstream\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    299\u001b[0m         \u001b[0;32mreturn\u001b[0m \u001b[0mresp\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mgot_stream\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mapi_key\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    300\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/openai/api_requestor.py\u001b[0m in \u001b[0;36m_interpret_response\u001b[0;34m(self, result, stream)\u001b[0m\n\u001b[1;32m    698\u001b[0m         \u001b[0;32melse\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    699\u001b[0m             return (\n\u001b[0;32m--> 700\u001b[0;31m                 self._interpret_response_line(\n\u001b[0m\u001b[1;32m    701\u001b[0m                     \u001b[0mresult\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcontent\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdecode\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m\"utf-8\"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    702\u001b[0m                     \u001b[0mresult\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mstatus_code\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/openai/api_requestor.py\u001b[0m in \u001b[0;36m_interpret_response_line\u001b[0;34m(self, rbody, rcode, rheaders, stream)\u001b[0m\n\u001b[1;32m    761\u001b[0m         \u001b[0mstream_error\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mstream\u001b[0m \u001b[0;32mand\u001b[0m \u001b[0;34m\"error\"\u001b[0m \u001b[0;32min\u001b[0m \u001b[0mresp\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdata\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    762\u001b[0m         \u001b[0;32mif\u001b[0m \u001b[0mstream_error\u001b[0m \u001b[0;32mor\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;36m200\u001b[0m \u001b[0;34m<=\u001b[0m \u001b[0mrcode\u001b[0m \u001b[0;34m<\u001b[0m \u001b[0;36m300\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 763\u001b[0;31m             raise self.handle_error_response(\n\u001b[0m\u001b[1;32m    764\u001b[0m                 \u001b[0mrbody\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mrcode\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mresp\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdata\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mrheaders\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mstream_error\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mstream_error\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    765\u001b[0m             )\n",
+            "\u001b[0;31mRateLimitError\u001b[0m: You exceeded your current quota, please check your plan and billing details."
+          ]
+        }
+      ]
+    }
+  ]
+}
